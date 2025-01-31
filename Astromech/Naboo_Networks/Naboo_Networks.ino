@@ -8,8 +8,8 @@ SPI2Driver driver2;
 ESPNowManager espNow;
 
 const char* ssid = "eduroam";
-const char* username = "cwu81@calpoly.edu";
-const char* password = "bJjtKG$k5OGtPY8Q";
+const char* username = "";
+const char* password = "";
 
 uint8_t receiverAddress[] = {0xF0, 0x9E, 0x9E, 0x21, 0xEC, 0x8C}; // Replace with actual MAC address
 
