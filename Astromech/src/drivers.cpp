@@ -1,7 +1,3 @@
-#include <cstdint>
-#include <cstdlib>
-#include <cstdio>
-
 class drivers {
     public:
         void motor_control();
