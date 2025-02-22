@@ -2,10 +2,10 @@
 
 // temporary pin numbers for testing change later for specific pins
 SPI1Driver::SPI1Driver() {
-    PIN_NUM_MISO = 37;
-    PIN_NUM_MOSI = 35;
-    PIN_NUM_CLK = 36;
-    PIN_NUM_CS = 38;
+    PIN_NUM_MISO = 38;
+    PIN_NUM_MOSI = 37;
+    PIN_NUM_CLK = 39;
+    PIN_NUM_CS = 36;
 }
 
 // initialize SPI1
