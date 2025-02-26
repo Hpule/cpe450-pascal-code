@@ -7,7 +7,7 @@
 class SPI2Driver : public SPIDriverBase {
 public:
     SPI2Driver();
-    void init() override;
+    void init(int freq) override;
 
     // void IRAM_ATTR gpio_isr_handler() override;
 };

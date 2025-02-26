@@ -9,9 +9,9 @@ SPI2Driver::SPI2Driver() {
 }
 
 // initialize SPI2
-void SPI2Driver::init() {
+void SPI2Driver::init(int freq) {
     SPI.begin(PIN_NUM_CLK, PIN_NUM_MISO, PIN_NUM_MOSI, PIN_NUM_CS);
-    SPI.setFrequency(1000000);  // 1 MHz
+    SPI.setFrequency(freq);  // 1 MHz ~1000000
     SPI.setDataMode(SPI_MODE0);
 }
 

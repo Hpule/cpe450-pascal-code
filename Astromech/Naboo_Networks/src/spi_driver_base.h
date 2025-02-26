@@ -14,13 +14,17 @@ public:
     virtual ~SPIDriverBase();
 
     // for extending classes to override
-    virtual void init() = 0;
+    virtual void init(int freq) = 0;
 
     // send data over SPI
     void send(const uint8_t *data, size_t len);
 
     // send string over SPI
     void send(const char *str);
+
+    uint8_t getCSPin() {
+        return PIN_NUM_CS;
+    }
 
     // tried to implement interrupt handling but it didn't work with overriding
     // virtual void IRAM_ATTR gpio_isr_handler() = 0;
