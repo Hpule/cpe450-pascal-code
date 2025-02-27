@@ -8,4 +8,5 @@ class drivers {
         void speaker_transmit();
         void init();
         void io_transmit();
+        void i2c(); 
 };
