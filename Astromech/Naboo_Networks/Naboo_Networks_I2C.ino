@@ -1,19 +1,15 @@
-<<<<<<< Updated upstream
 #include "src/i2C_driver.h"
 #include "src/esp_now_manager.h"
+#include <Arduino.h>
+#include "src/i2c_driver.h"
 
 #define SDA 9
 #define SLA 8
 
-void setup() {
-  // put your setup code here, to run once:
-  
-=======
-#include <Arduino.h>
-#include "src/i2c_driver.h"
 
 // Create an instance of your I2C driver
 I2CDriver i2c;
+
 
 void setup() {
     Serial.begin(115200);
@@ -21,16 +17,11 @@ void setup() {
 
     // Initialize the I2C driver
     i2c.init();
->>>>>>> Stashed changes
 
     Serial.println("I2C Transmission Test: Sending 3 Signals...");
 }
 
 void loop() {
-<<<<<<< Updated upstream
-  // put your main code here, to run repeatedly:
-
-=======
     // I2C Transmission Test - Three Distinct Signals
     uint8_t testAddress = 0x3C;  // Change to your device's address
 
@@ -51,7 +42,6 @@ void loop() {
     i2c.transmit(testAddress, message3);
     Serial.println("Transmission 3 Sent");
     delay(3000);  // Longer delay before repeating the sequence
->>>>>>> Stashed changes
 }
 
 
