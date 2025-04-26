@@ -1,3 +1,225 @@
+// -------------------------- Servo Testing + SBUS (NO Screen) --------------------------
+#include <Arduino.h>
+#include <sbus.h>
+
+#define SERVO_PIN 46
+  // Change to your actual pin
+
+#define SERVO_UPDATE_MS 20  // Update interval in milliseconds
+#define SERVO_STEP 1        // Degrees to change per update
+
+#define SBUS_RX_PIN 18 // Change this to an available GPIO pin
+
+int currentAngle = 90;      // Starting angle
+int targetAngle = 90;       // Target angle
+unsigned long lastUpdate = 0;
+
+// SBUS objects
+bfs::SbusRx sbus_rx(&Serial2, SBUS_RX_PIN, -1, false); // Using external inverter
+bfs::SbusData sbusData;
+
+
+uint8_t servo_value = 127;
+
+// Min/Max Motor Speed for Debugger
+int max_motor_speed = 100;
+int min_motor_speed = -100;
+
+// Motor Speed Scalar
+int motor_speed_scalar = 0;
+
+// Bias for the Motor Speed
+int motor_speed_bias = 0;
+
+// Min/Max Servo Speed for Debugger
+int max_servo_speed = 100;
+int min_servo_speed = -100;
+
+void control_motors_joystick(uint16_t ver_val, uint16_t hor_val) {
+    // These calculations might need to be
+    // changed based on calibrations!!
+    // center both values at 0
+    int16_t hor_val_origin = hor_val - 124;
+    int16_t ver_val_origin = ver_val - 124;
+    int16_t left_motor = ver_val_origin + hor_val_origin;
+    int16_t right_motor = ver_val_origin - hor_val_origin;
+    // The Clamping of Values is Now Done in the Motor Servo Control
+    // ver_val represents throttle, hor_val represents steering
+
+    int16_t left_speed = ((left_motor * 100) >> 9);
+    int16_t right_speed = ((right_motor * 100) >> 9);
+
+    // Clamp Speed if Less Than 3
+    if (abs(left_speed) < 3)
+      left_speed = 0;
+    if (abs(right_speed) < 3)
+      right_speed = 0;
+
+    // SerialUSB.print(left_speed);
+    // SerialUSB.print(" ");
+    // SerialUSB.print(right_speed);
+    // SerialUSB.print("\n");
+
+    change_motor_speed(0, left_speed);
+}
+
+// Sets Motor Speed
+void change_motor_speed(uint8_t motor_num, int16_t speed) {
+
+    // Apply the Bias
+    if (abs(speed) > 5)
+        speed += motor_speed_bias;
+
+    // Left Motor
+    if (!motor_num) {
+        // Calculate speed value target
+        servo_value = transformSpeed(speed, min_motor_speed, max_motor_speed, motor_speed_scalar);
+    }
+
+    // Right Motor
+    else {
+        // Calculate speed value
+        servo_value = 255 - transformSpeed(speed, min_motor_speed, max_motor_speed, motor_speed_scalar);
+    }
+}
+
+
+uint8_t transformSpeed(int16_t speed, int min_speed, int max_speed, int scalar) {
+
+    // Apply the Scalar
+    if (speed > 0) {
+        speed += scalar;
+        if (speed < 0)
+            speed = 0;
+    }
+    else {
+        speed -= scalar;
+        if (speed > 0)
+            speed = 0;
+    }
+
+    // Clamp Speed Between Min and Max Speed
+    if (speed > max_speed)
+        speed = max_speed;
+    else if (speed < min_speed)
+        speed = min_speed;
+
+    // Transform Value into an Unsigned Byte
+    return 127 - speed;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(SERVO_PIN, OUTPUT);
+  Serial.println("Servo gradual control test");
+  Serial.println("Commands: 'l' (left), 'c' (center), 'r' (right), '+'/'-' (adjust speed)");
+
+    // Initialize SBUS
+  Serial2.begin(100000, SERIAL_8E2, SBUS_RX_PIN, -1);
+  sbus_rx.Begin();
+  Serial.println("SBUS initialized on pin " + String(SBUS_RX_PIN));
+}
+
+void sendServoPulse(int angle) {
+  int pulseWidth = map(angle, 0, 180, 500, 2400);
+  digitalWrite(SERVO_PIN, HIGH);
+  delayMicroseconds(pulseWidth);
+  digitalWrite(SERVO_PIN, LOW);
+}
+
+
+
+void updateServo() {
+  unsigned long currentTime = millis();
+
+  // Send pulse regardless of angle change
+  sendServoPulse(currentAngle);
+
+  // Only update position at specified intervals
+  if (currentTime - lastUpdate >= SERVO_UPDATE_MS) {
+    lastUpdate = currentTime;
+
+    // Gradually move toward target
+    if (currentAngle < targetAngle) {
+      currentAngle += SERVO_STEP;
+    } else if (currentAngle > targetAngle) {
+      currentAngle -= SERVO_STEP;
+    }
+  }
+}
+
+
+void testServoSweep() {
+  Serial.println("Starting servo sweep test...");
+
+  // Move to left position
+  Serial.println("Moving to left position");
+  for(int angle = 90; angle >= 0; angle--) {
+    sendServoPulse(angle);
+    delay(20);
+  }
+  delay(1000);
+
+  // Sweep to right position
+  Serial.println("Sweeping to right position");
+  for(int angle = 0; angle <= 180; angle++) {
+    sendServoPulse(angle);
+    delay(20);
+  }
+  delay(1000);
+
+  // Return to center
+  Serial.println("Returning to center");
+  for(int angle = 180; angle >= 90; angle--) {
+    sendServoPulse(angle);
+    delay(20);
+  }
+
+  Serial.println("Test complete");
+}
+
+void loop() {
+  // Process commands
+  // if (Serial.available()) {
+  //   char cmd = Serial.read();
+  //   switch (cmd) {
+  //     case 'l': targetAngle = 0; break;    // Left
+  //     case 'c': targetAngle = 90; break;   // Center
+  //     case 'r': targetAngle = 180; break;  // Right
+  //     case '+': targetAngle += 10; break;  // Increment
+  //     case '-': targetAngle -= 10; break;  // Decrement
+  //   }
+  //   targetAngle = constrain(targetAngle, 0, 180);
+  //   Serial.print("Target angle: ");
+  //   Serial.println(targetAngle);
+  // }
+
+  // updateServo();
+  // delay(2); // Small delay for stability
+
+    if (sbus_rx.Read()) {
+        sbusData = sbus_rx.data();
+
+        Serial.println(sbusData.ch[14]);
+        uint16_t ver_8bit = sbusData.ch[14] >> 3;
+        uint16_t hor_8bit = ver_8bit;
+
+        control_motors_joystick(ver_8bit, hor_8bit);
+
+        Serial.println("Servo number: ");
+        Serial.print(servo_value);
+
+        targetAngle = constrain(servo_value, 0, 180);
+
+        updateServo();
+        delay(2);
+      }
+
+
+
+  // testServoSweep();
+}
+
 // -------------------------- SBUS Library + SCREEN +SERVO--------------------------
 
 // #include <Arduino.h>
@@ -93,247 +315,247 @@
 // }
 
 // -------------------------- Servo Testing --------------------------
-#include <Arduino.h>
-#include <sbus.h>
+// #include <Arduino.h>
+// #include <sbus.h>
 
-#define SERVO_PIN 46
-  // Change to your actual pin
+// #define SERVO_PIN 46
+//   // Change to your actual pin
 
-#define SERVO_UPDATE_MS 20  // Update interval in milliseconds
-#define SERVO_STEP 1        // Degrees to change per update
+// #define SERVO_UPDATE_MS 20  // Update interval in milliseconds
+// #define SERVO_STEP 1        // Degrees to change per update
 
-#define SERVO_PIN 5
-#define MOTOR_BASE_TIME 500    // Minimum pulse width (0° position)
-#define MOTOR_CHANGE_CONST 10  // µs per degree (2400-500)/180 ≈ 10.56
-#define SBUS_RX_PIN 18 // Change this to an available GPIO pin
+// #define SERVO_PIN 5
+// #define MOTOR_BASE_TIME 500    // Minimum pulse width (0° position)
+// #define MOTOR_CHANGE_CONST 10  // µs per degree (2400-500)/180 ≈ 10.56
+// #define SBUS_RX_PIN 18 // Change this to an available GPIO pin
 
-int currentAngle = 90;      // Starting angle
-int targetAngle = 90;       // Target angle
-unsigned long lastUpdate = 0;
-uint8_t servo_value = 127;
+// int currentAngle = 90;      // Starting angle
+// int targetAngle = 90;       // Target angle
+// unsigned long lastUpdate = 0;
+// uint8_t servo_value = 127;
 
-// Min/Max Motor Speed for Debugger
-int max_motor_speed = 100;
-int min_motor_speed = -100;
+// // Min/Max Motor Speed for Debugger
+// int max_motor_speed = 100;
+// int min_motor_speed = -100;
 
-// Motor Speed Scalar
-int motor_speed_scalar = 0;
+// // Motor Speed Scalar
+// int motor_speed_scalar = 0;
 
-// Bias for the Motor Speed
-int motor_speed_bias = 0;
+// // Bias for the Motor Speed
+// int motor_speed_bias = 0;
 
-// Min/Max Servo Speed for Debugger
-int max_servo_speed = 100;
-int min_servo_speed = -100;
-
-
-// SBUS objects
-// bfs::SbusRx sbus_rx(&Serial2, SBUS_RX_PIN, -1, false); // Using external inverter
-// bfs::SbusData sbusData;
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(SERVO_PIN, OUTPUT);
-  Serial.println("Servo gradual control test");
-  Serial.println("Commands: 'l' (left), 'c' (center), 'r' (right), '+'/'-' (adjust speed)");
+// // Min/Max Servo Speed for Debugger
+// int max_servo_speed = 100;
+// int min_servo_speed = -100;
 
 
-    // // Initialize SBUS on Serial2
-    // Serial2.begin(100000, SERIAL_8E2, SBUS_RX_PIN, -1);
-    // sbus_rx.Begin();
-}
+// // SBUS objects
+// // bfs::SbusRx sbus_rx(&Serial2, SBUS_RX_PIN, -1, false); // Using external inverter
+// // bfs::SbusData sbusData;
 
-void control_motors_joystick(uint16_t ver_val, uint16_t hor_val) {
-    // These calculations might need to be
-    // changed based on calibrations!!
-    // center both values at 0
-    int16_t hor_val_origin = hor_val - 124;
-    int16_t ver_val_origin = ver_val - 124;
-    int16_t left_motor = ver_val_origin + hor_val_origin;
-    int16_t right_motor = ver_val_origin - hor_val_origin;
-    // The Clamping of Values is Now Done in the Motor Servo Control
-    // ver_val represents throttle, hor_val represents steering
-
-    int16_t left_speed = ((left_motor * 100) >> 9);
-    int16_t right_speed = ((right_motor * 100) >> 9);
-
-    // Clamp Speed if Less Than 3
-    if (abs(left_speed) < 3)
-      left_speed = 0;
-    if (abs(right_speed) < 3)
-      right_speed = 0;
-
-    // SerialUSB.print(left_speed);
-    // SerialUSB.print(" ");
-    // SerialUSB.print(right_speed);
-    // SerialUSB.print("\n");
-
-    change_motor_speed(0, left_speed);
-}
-
-// Sets Motor Speed
-void change_motor_speed(uint8_t motor_num, int16_t speed) {
-
-    // Apply the Bias
-    if (abs(speed) > 5)
-        speed += motor_speed_bias;
-
-    // Left Motor
-    if (!motor_num) {
-        // Calculate speed value target
-        servo_value = transformSpeed(speed, min_motor_speed, max_motor_speed, motor_speed_scalar);
-    }
-
-    // Right Motor
-    else {
-        // Calculate speed value
-        servo_value = 255 - transformSpeed(speed, min_motor_speed, max_motor_speed, motor_speed_scalar);
-    }
-}
+// void setup() {
+//   Serial.begin(115200);
+//   pinMode(SERVO_PIN, OUTPUT);
+//   Serial.println("Servo gradual control test");
+//   Serial.println("Commands: 'l' (left), 'c' (center), 'r' (right), '+'/'-' (adjust speed)");
 
 
-uint8_t transformSpeed(int16_t speed, int min_speed, int max_speed, int scalar) {
+//     // // Initialize SBUS on Serial2
+//     // Serial2.begin(100000, SERIAL_8E2, SBUS_RX_PIN, -1);
+//     // sbus_rx.Begin();
+// }
 
-    // Apply the Scalar
-    if (speed > 0) {
-        speed += scalar;
-        if (speed < 0)
-            speed = 0;
-    }
-    else {
-        speed -= scalar;
-        if (speed > 0)
-            speed = 0;
-    }
+// void control_motors_joystick(uint16_t ver_val, uint16_t hor_val) {
+//     // These calculations might need to be
+//     // changed based on calibrations!!
+//     // center both values at 0
+//     int16_t hor_val_origin = hor_val - 124;
+//     int16_t ver_val_origin = ver_val - 124;
+//     int16_t left_motor = ver_val_origin + hor_val_origin;
+//     int16_t right_motor = ver_val_origin - hor_val_origin;
+//     // The Clamping of Values is Now Done in the Motor Servo Control
+//     // ver_val represents throttle, hor_val represents steering
 
-    // Clamp Speed Between Min and Max Speed
-    if (speed > max_speed)
-        speed = max_speed;
-    else if (speed < min_speed)
-        speed = min_speed;
+//     int16_t left_speed = ((left_motor * 100) >> 9);
+//     int16_t right_speed = ((right_motor * 100) >> 9);
 
-    // Transform Value into an Unsigned Byte
-    return 127 - speed;
-}
+//     // Clamp Speed if Less Than 3
+//     if (abs(left_speed) < 3)
+//       left_speed = 0;
+//     if (abs(right_speed) < 3)
+//       right_speed = 0;
 
-void sendServoPulse(int angle) {
-    // Calculate pulse width in microseconds
-    // int pulseWidth = MOTOR_BASE_TIME + (MOTOR_CHANGE_CONST * servo_value);
-    // int pulseWidth = map(servo_value, 88, 168, 0, 180);
+//     // SerialUSB.print(left_speed);
+//     // SerialUSB.print(" ");
+//     // SerialUSB.print(right_speed);
+//     // SerialUSB.print("\n");
 
-    // pulseWidth = constrain(pulseWidth, 500, 2400);
+//     change_motor_speed(0, left_speed);
+// }
 
-    int pulseWidth = map(angle, 0, 180, 500, 2400);
-    // Serial.println(angle);
-    // Generate PWM pulse
-    digitalWrite(SERVO_PIN, HIGH);
-    delayMicroseconds(pulseWidth);
-    digitalWrite(SERVO_PIN, LOW);
+// // Sets Motor Speed
+// void change_motor_speed(uint8_t motor_num, int16_t speed) {
 
-    // Maintain 20ms period (50Hz refresh rate)
-    // delayMicroseconds(20000 - pulseWidth);
-}
+//     // Apply the Bias
+//     if (abs(speed) > 5)
+//         speed += motor_speed_bias;
 
-void updateServo() {
-  unsigned long currentTime = millis();
+//     // Left Motor
+//     if (!motor_num) {
+//         // Calculate speed value target
+//         servo_value = transformSpeed(speed, min_motor_speed, max_motor_speed, motor_speed_scalar);
+//     }
 
-  // Send pulse regardless of angle change
-  sendServoPulse(currentAngle);
-
-  // Only update position at specified intervals
-  if (currentTime - lastUpdate >= SERVO_UPDATE_MS) {
-    lastUpdate = currentTime;
-
-    // Gradually move toward target
-    if (currentAngle < targetAngle) {
-      currentAngle += SERVO_STEP;
-    } else if (currentAngle > targetAngle) {
-      currentAngle -= SERVO_STEP;
-    }
-  }
-}
+//     // Right Motor
+//     else {
+//         // Calculate speed value
+//         servo_value = 255 - transformSpeed(speed, min_motor_speed, max_motor_speed, motor_speed_scalar);
+//     }
+// }
 
 
-void testServoSweep() {
-  Serial.println("Starting servo sweep test...");
+// uint8_t transformSpeed(int16_t speed, int min_speed, int max_speed, int scalar) {
 
-  // Move to left position
-  Serial.println("Moving to left position");
-  for(int angle = 90; angle >= 0; angle--) {
-    sendServoPulse(angle);
-    delay(20);
-  }
-  delay(1000);
+//     // Apply the Scalar
+//     if (speed > 0) {
+//         speed += scalar;
+//         if (speed < 0)
+//             speed = 0;
+//     }
+//     else {
+//         speed -= scalar;
+//         if (speed > 0)
+//             speed = 0;
+//     }
 
-  // Sweep to right position
-  Serial.println("Sweeping to right position");
-  for(int angle = 0; angle <= 180; angle++) {
-    sendServoPulse(angle);
-    delay(20);
-  }
-  delay(1000);
+//     // Clamp Speed Between Min and Max Speed
+//     if (speed > max_speed)
+//         speed = max_speed;
+//     else if (speed < min_speed)
+//         speed = min_speed;
 
-  // Return to center
-  Serial.println("Returning to center");
-  for(int angle = 180; angle >= 90; angle--) {
-    sendServoPulse(angle);
-    delay(20);
-  }
+//     // Transform Value into an Unsigned Byte
+//     return 127 - speed;
+// }
 
-  Serial.println("Test complete");
-}
+// void sendServoPulse(int angle) {
+//     // Calculate pulse width in microseconds
+//     // int pulseWidth = MOTOR_BASE_TIME + (MOTOR_CHANGE_CONST * servo_value);
+//     // int pulseWidth = map(servo_value, 88, 168, 0, 180);
 
-void loop() {
-  // Process commands
-  // if (Serial.available()) {
-  //   char cmd = Serial.read();
-  //   switch (cmd) {
-  //     case 'l': targetAngle = 0; break;    // Left
-  //     case 'c': targetAngle = 90; break;   // Center
-  //     case 'r': targetAngle = 180; break;  // Right
-  //     case '+': targetAngle += 10; break;  // Increment
-  //     case '-': targetAngle -= 10; break;  // Decrement
-  //   }
-  //   targetAngle = constrain(targetAngle, 0, 180);
-  //   Serial.print("Target angle: ");
-  //   Serial.println(targetAngle);
-  // }
+//     // pulseWidth = constrain(pulseWidth, 500, 2400);
 
-  // updateServo();
-  // delay(2); // Small delay for stability
-  uint16_t ver_val = 1024; // Replace with actual joystick value
-  uint16_t hor_val = 1024; // Replace with actual joystick value
+//     int pulseWidth = map(angle, 0, 180, 500, 2400);
+//     // Serial.println(angle);
+//     // Generate PWM pulse
+//     digitalWrite(SERVO_PIN, HIGH);
+//     delayMicroseconds(pulseWidth);
+//     digitalWrite(SERVO_PIN, LOW);
 
-    //   static unsigned long lastFrameTime = 0;
-    // const int frameDelay = 1000 / 11; // ~91ms per frame
-    // unsigned long currentTime = millis();
-    // static unsigned long lastSbusUpdate = 0;
-    // const int sbusUpdateInterval = 100; // Update every 100ms to avoid flooding serial
+//     // Maintain 20ms period (50Hz refresh rate)
+//     // delayMicroseconds(20000 - pulseWidth);
+// }
 
-    // // Read and process SBUS data at a lower frequency
-    // if (currentTime - lastSbusUpdate >= sbusUpdateInterval) {
-    //     lastSbusUpdate = currentTime;
+// void updateServo() {
+//   unsigned long currentTime = millis();
 
-    //   if (sbus_rx.Read()) {
-    //     sbusData = sbus_rx.data();
+//   // Send pulse regardless of angle change
+//   sendServoPulse(currentAngle);
 
-    //     Serial.println(sbusData.ch[14]);
-    //     uint16_t ver_8bit = sbusData.ch[14] >> 3;
-    //     uint16_t hor_8bit = ver_8bit;
+//   // Only update position at specified intervals
+//   if (currentTime - lastUpdate >= SERVO_UPDATE_MS) {
+//     lastUpdate = currentTime;
 
-    //     control_motors_joystick(ver_8bit, hor_8bit);
+//     // Gradually move toward target
+//     if (currentAngle < targetAngle) {
+//       currentAngle += SERVO_STEP;
+//     } else if (currentAngle > targetAngle) {
+//       currentAngle -= SERVO_STEP;
+//     }
+//   }
+// }
 
-    //     Serial.println("Servo number: ");
-    //     Serial.print(servo_value);
 
-    //     updateServo();
-    //   }
-    // }
+// void testServoSweep() {
+//   Serial.println("Starting servo sweep test...");
 
-    testServoSweep();
+//   // Move to left position
+//   Serial.println("Moving to left position");
+//   for(int angle = 90; angle >= 0; angle--) {
+//     sendServoPulse(angle);
+//     delay(20);
+//   }
+//   delay(1000);
 
-  // testServoSweep();
-}
+//   // Sweep to right position
+//   Serial.println("Sweeping to right position");
+//   for(int angle = 0; angle <= 180; angle++) {
+//     sendServoPulse(angle);
+//     delay(20);
+//   }
+//   delay(1000);
+
+//   // Return to center
+//   Serial.println("Returning to center");
+//   for(int angle = 180; angle >= 90; angle--) {
+//     sendServoPulse(angle);
+//     delay(20);
+//   }
+
+//   Serial.println("Test complete");
+// }
+
+// void loop() {
+//   // Process commands
+//   // if (Serial.available()) {
+//   //   char cmd = Serial.read();
+//   //   switch (cmd) {
+//   //     case 'l': targetAngle = 0; break;    // Left
+//   //     case 'c': targetAngle = 90; break;   // Center
+//   //     case 'r': targetAngle = 180; break;  // Right
+//   //     case '+': targetAngle += 10; break;  // Increment
+//   //     case '-': targetAngle -= 10; break;  // Decrement
+//   //   }
+//   //   targetAngle = constrain(targetAngle, 0, 180);
+//   //   Serial.print("Target angle: ");
+//   //   Serial.println(targetAngle);
+//   // }
+
+//   // updateServo();
+//   // delay(2); // Small delay for stability
+//   uint16_t ver_val = 1024; // Replace with actual joystick value
+//   uint16_t hor_val = 1024; // Replace with actual joystick value
+
+//     //   static unsigned long lastFrameTime = 0;
+//     // const int frameDelay = 1000 / 11; // ~91ms per frame
+//     // unsigned long currentTime = millis();
+//     // static unsigned long lastSbusUpdate = 0;
+//     // const int sbusUpdateInterval = 100; // Update every 100ms to avoid flooding serial
+
+//     // // Read and process SBUS data at a lower frequency
+//     // if (currentTime - lastSbusUpdate >= sbusUpdateInterval) {
+//     //     lastSbusUpdate = currentTime;
+
+//     //   if (sbus_rx.Read()) {
+//     //     sbusData = sbus_rx.data();
+
+//     //     Serial.println(sbusData.ch[14]);
+//     //     uint16_t ver_8bit = sbusData.ch[14] >> 3;
+//     //     uint16_t hor_8bit = ver_8bit;
+
+//     //     control_motors_joystick(ver_8bit, hor_8bit);
+
+//     //     Serial.println("Servo number: ");
+//     //     Serial.print(servo_value);
+
+//     //     updateServo();
+//     //   }
+//     // }
+
+//     testServoSweep();
+
+//   // testServoSweep();
+// }
 
 
 // -------------------------- SBUS Library + SCREEN --------------------------
