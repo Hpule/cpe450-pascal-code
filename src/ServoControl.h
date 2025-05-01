@@ -26,4 +26,4 @@ private:
     int lastPosition;
 };
 
-#endif // SERVO_CONTROL_H
+#endif // SERVO_CONTROL_H   
