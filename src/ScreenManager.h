@@ -4,9 +4,14 @@
 #include "Adafruit_GFX.h"
 #include "Adafruit_HX8357.h"
 #include "spi1_driver.h"
-#include <sbus.h>  // Add SBUS library inclusion here
 
-#define TEXT_SIZE 1
+#define TEXT_SIZE 2
+#define TEXT_ORIE 1
+#define COL_SPACE 90
+#define ROW_SPACE 45
+#define X_START_DEL   45
+#define Y_START   60 
+
 
 class ScreenManager
 {
@@ -14,22 +19,17 @@ public:
     ScreenManager(int tft_cs, int tft_dc, int tft_rst, int tft_lite);
 
     void begin();
-
-    // functions we want to add to display our own layout
-    void displayGrid();
-    void drawStaticIndexes();
-    void eraseHexValues();
-    void erasePreviousFPS();
-    void displayFPS(float fps);
-    void displayUartData(uint8_t* data, size_t len);
     
-    // New function for displaying SBUS data
-    void displaySbusValues(int16_t* channels, bool lost_frame, bool failsafe);
-    void displaySbusGrid(int16_t* channels);
+    // Display SBUS values
+    void displayGrid(int16_t* channels = nullptr, bool lost_frame = false, bool failsafe = false);
+    void displayFPS(float fps);    
 
-
-    void setHibernationMode(bool enable); // Toggle when called
-    void setLiteMode(bool enable, int tft_lite); // Toggle when called 
+    // Shortcut to show disconnected state
+    void displayDisconnected();
+    
+    // Utility functions
+    void setHibernationMode(bool enable);
+    void setLiteMode(bool enable, int tft_lite);
 
 private:
     Adafruit_HX8357 tft;
@@ -39,10 +39,11 @@ private:
     const int TFT_LITE; 
 
     char lastHex[4][4][5];
+    
+    void drawStaticIndexes();
+    void eraseHexValues();
+    void erasePreviousFPS();
 
-    unsigned long lastFrameTime = 0;
-    const int targetFPS = 11;
-    const int frameDelay = 1000 / targetFPS;
 };
 
 #endif // ScreenManager_h

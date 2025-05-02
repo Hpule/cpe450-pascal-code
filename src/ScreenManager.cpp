@@ -7,11 +7,11 @@ ScreenManager::ScreenManager(int tft_cs, int tft_dc, int tft_rst, int tft_lite)
   TFT_CS(tft_cs), TFT_DC(tft_dc), TFT_RST(tft_rst), TFT_LITE(tft_lite){}
 
 void ScreenManager::begin() {
-    spi1.init(1000000);
+    spi1.init(2000000);
     tft.begin();
     
-    // Set to portrait (0) or portrait flipped (2) for vertical orientation
-    tft.setRotation(0); // 0 for normal portrait, 2 for flipped portrait
+    // Set to landscape orientation
+    tft.setRotation(TEXT_ORIE);
     
     tft.fillScreen(HX8357_BLACK);
 
@@ -27,22 +27,18 @@ void ScreenManager::begin() {
 
 void ScreenManager::drawStaticIndexes() {
     tft.setTextColor(HX8357_WHITE);
-    tft.setTextSize(TEXT_SIZE); // Keep at 2 to fit on screen
+    tft.setTextSize(TEXT_SIZE);
 
-    // Adjusted spacing for portrait mode
     int startX = 10;
-    int startY = 60; // Start lower to give room for FPS at top
-    int rowSpacing = 35; // Slightly decreased to fit 4 rows
-    int colSpacing = 80; // Decreased to fit 4 columns in portrait mode
 
     for (int row = 0; row < 4; row++) {
         for (int col = 0; col < 4; col++) {
-            int index = row * 4 + col; // Changed index calculation for row-oriented grid
+            int index = row * 4 + col;
             char indexStr[5];
 
             sprintf(indexStr, "%2d:", index); // Format " 0:" to "15:"
 
-            tft.setCursor(startX + col * colSpacing, startY + row * rowSpacing);
+            tft.setCursor(startX + col * COL_SPACE, Y_START + row * ROW_SPACE);
             tft.print(indexStr);
         }
     }
@@ -52,25 +48,16 @@ void ScreenManager::eraseHexValues() {
     tft.setTextColor(HX8357_BLACK);
     tft.setTextSize(TEXT_SIZE);
 
-    // Adjusted spacing to match drawStaticIndexes
-    int startX = 45; // Decreased from 50
-    int startY = 60; // Matches drawStaticIndexes
-    int rowSpacing = 35; // Matches drawStaticIndexes
-    int colSpacing = 80; // Matches drawStaticIndexes
-
     for (int row = 0; row < 4; row++) {
         for (int col = 0; col < 4; col++) {
-            if (row == 0 && col == 0) {
-                continue; // Skip first position
-            }
-            tft.setCursor(startX + col * colSpacing, startY + row * rowSpacing);
+            tft.setCursor(X_START_DEL + col * COL_SPACE, Y_START + row * ROW_SPACE);
             tft.print(lastHex[row][col]);
         }
     }
 }
 
 void ScreenManager::erasePreviousFPS() {
-    tft.fillRect(10, 20, 150, 30, HX8357_BLACK); // Positioned higher up
+    tft.fillRect(10, 20, 150, 30, HX8357_BLACK);
 }
 
 void ScreenManager::displayFPS(float fps) {
@@ -81,60 +68,83 @@ void ScreenManager::displayFPS(float fps) {
 
     tft.setTextColor(HX8357_WHITE);
     tft.setTextSize(TEXT_SIZE);
-    tft.setCursor(10, 20); // Positioned higher up
+    tft.setCursor(10, 20);
     tft.print(fpsStr);
 }
 
-void ScreenManager::displayGrid() {
-    unsigned long startTime = micros();
-
+void ScreenManager::displayGrid(int16_t* channels, bool lost_frame, bool failsafe) {
+    // If no channels provided, display grid with zeros
+    int16_t defaultChannels[16] = {0};
+    if (channels == nullptr) {
+        channels = defaultChannels;
+    }
+    
+    // Main grid display for upper part of screen
     eraseHexValues();
 
     tft.setTextColor(HX8357_WHITE);
     tft.setTextSize(TEXT_SIZE);
 
-    // Adjusted spacing to match drawStaticIndexes
-    int startX = 45; // Decreased from 50
-    int startY = 60; // Matches drawStaticIndexes
-    int rowSpacing = 35; // Matches drawStaticIndexes
-    int colSpacing = 80; // Matches drawStaticIndexes
-
-    for (int row = 0; row < 4; row++) {
-        for (int col = 0; col < 4; col++) {
-            if (row == 0 && col == 0) {
-                continue; // Skip first position
-            } else {
-                uint16_t hexValue = random(0x0000, 0xFFFF); // Generate new hex value
-                char hexStr[5];
-
-                sprintf(hexStr, "%04X", hexValue); // Format "XXXX"
-                strcpy(lastHex[row][col], hexStr); // Store new hex value
-
-                tft.setCursor(startX + col * colSpacing, startY + row * rowSpacing);
-                tft.print(hexStr); // Print new hex value
-            }
+    // Check if we're connected (any non-zero value)
+    bool connected = false;
+    for (int i = 0; i < 16; i++) {
+        if (channels[i] != 0) {
+            connected = true;
+            break;
         }
     }
 
-    // Calculate FPS
-    unsigned long frameTime = micros() - startTime;
-    float fps = 1e6 / frameTime; // Convert microseconds to FPS
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            int index = row * 4 + col;
+            char hexStr[5];
+            
+            // Format as 4-digit decimal
+            sprintf(hexStr, "%4d", channels[index]);
+            strcpy(lastHex[row][col], hexStr); // Store for future erasing
 
-    displayFPS(fps); // Update FPS display
+            // Set color based on connection
+            if (connected) {
+                tft.setTextColor(HX8357_GREEN);
+            } else {
+                tft.setTextColor(HX8357_RED);
+            }
+            
+            tft.setCursor(X_START_DEL + col * COL_SPACE, Y_START + row * ROW_SPACE);
+            tft.print(hexStr);
+        }
+    }
+    
+    // Calculate appropriate position for status indicators based on grid size
+    int statusY = Y_START + 4 * ROW_SPACE + 20; // Position below the grid with some margin
+    
+    // Display connection status
+    tft.fillRect(0, statusY, tft.width(), 40, HX8357_BLACK);
+    tft.setTextSize(TEXT_SIZE);
+    
+    // Connection status indicators
+    tft.setCursor(10, statusY);
+    if (connected) {
+        tft.setTextColor(lost_frame ? HX8357_YELLOW : HX8357_GREEN);
+        tft.print(lost_frame ? "LOST FRAME" : "CONNECTED");
+    } else {
+        tft.setTextColor(HX8357_RED);
+        tft.print("DISCONNECTED");
+    }
+    
+    // Calculate position for failsafe indicator
+    int failsafeX = (TEXT_ORIE == 1) ? 180 : 10; // Different position based on orientation
+    int failsafeY = (TEXT_ORIE == 1) ? statusY : statusY + 30; // Different row if portrait
+    
+    tft.setCursor(failsafeX, failsafeY);
+    tft.setTextColor(failsafe ? HX8357_RED : HX8357_GREEN);
+    tft.print(failsafe ? "FAILSAFE" : "NORMAL");
 }
 
-void ScreenManager::displayUartData(uint8_t* data, size_t len) {
-    char hexStr[5];
-    tft.setTextColor(HX8357_BLACK);
-    tft.setTextSize(TEXT_SIZE);
-    tft.setCursor(45, 60); // Adjusted to match new grid
-    tft.print(lastHex[0][0]); // Erase previous hex value
-
-    sprintf(hexStr, "%04X", *(uint16_t*)data); // Convert first 2 bytes to hex string
-    strcpy(lastHex[0][0], hexStr); // Store new hex value
-    tft.setTextColor(HX8357_WHITE);
-    tft.setCursor(45, 60); // Adjusted to match new grid
-    tft.print(hexStr); // Print new hex value
+void ScreenManager::displayDisconnected() {
+    // Create and use zero-filled array
+    int16_t zeroChannels[16] = {0};
+    displayGrid(zeroChannels, true, false);
 }
 
 void ScreenManager::setHibernationMode(bool enable){
@@ -146,77 +156,9 @@ void ScreenManager::setHibernationMode(bool enable){
 }
 
 void ScreenManager::setLiteMode(bool enable, int tft_lite){
-    // Fixed: replaced 'yn' with 'enable'
     analogWrite(tft_lite, enable ? 255 : 0);
 }
 
-void ScreenManager::displaySbusValues(int16_t* channels, bool lost_frame, bool failsafe) {
-    // Clear a specific area for SBUS data
-    tft.fillRect(0, 200, tft.width(), 120, HX8357_BLACK);
-    
-    // Display just the channel values without labels
-    tft.setTextColor(HX8357_WHITE);
-    tft.setTextSize(2);
-    
-    int startX = 10;
-    int startY = 210;
-    int rowSpacing = 30;
-    int colSpacing = 70;
-    
-    // Display all 16 channels in a 4x4 grid
-    for (int row = 0; row < 4; row++) {
-        for (int col = 0; col < 4; col++) {
-            int index = row * 4 + col;
-            tft.setCursor(startX + col * colSpacing, startY + row * rowSpacing);
-            tft.print(channels[index]);
-        }
-    }
-    
-    // Simple status indicators (just colored text)
-    tft.setCursor(10, 330);
-    tft.setTextColor(lost_frame ? HX8357_RED : HX8357_GREEN);
-    tft.print(lost_frame ? "LOST" : "OK");
-    
-    tft.setCursor(120, 330);
-    tft.setTextColor(failsafe ? HX8357_RED : HX8357_GREEN);
-    tft.print(failsafe ? "FAIL" : "SAFE");
-}
-
-void ScreenManager::displaySbusGrid(int16_t* channels) {
-    unsigned long startTime = micros();
-
-    eraseHexValues();
-
-    tft.setTextColor(HX8357_WHITE);
-    tft.setTextSize(TEXT_SIZE);
-
-    int startX = 45;
-    int startY = 60;
-    int rowSpacing = 35;
-    int colSpacing = 80;
-
-    for (int row = 0; row < 4; row++) {
-        for (int col = 0; col < 4; col++) {
-            int index = row * 4 + col;
-            if (row == 0 && col == 0) {
-                continue; // Skip first position
-            } else {
-                char hexStr[5];
-                sprintf(hexStr, "%04X", channels[index]); // Format channel as hex
-                strcpy(lastHex[row][col], hexStr); // Store for future erasing
-
-                tft.setCursor(startX + col * colSpacing, startY + row * rowSpacing);
-                tft.print(hexStr);
-            }
-        }
-    }
-
-    // Calculate FPS
-    unsigned long frameTime = micros() - startTime;
-    float fps = 1e6 / frameTime;
-
-    displayFPS(fps);
-}
 
 // example usage
 
