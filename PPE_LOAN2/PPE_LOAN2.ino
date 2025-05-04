@@ -17,8 +17,8 @@
 
 // SBUS channel mappings
 #define H_CHANNEL 14  // Dome (heading) servo
-#define L_CHANNEL 6   // Left drive
-#define R_CHANNEL 7   // Right drive
+#define L_CHANNEL 7   // Left drive
+#define R_CHANNEL 6   // Right drive
 
 // Global objects
 ScreenManager screenManager(TFT_CS, TFT_DC, TFT_RST, TFT_LITE);
@@ -30,11 +30,6 @@ bool rcConnected = false;
 unsigned long lastSbusTime = 0;
 unsigned long lastDisplayUpdate = 0;
 static int counter = 0;
-
-void IRAM_ATTR acceleration_timer_callback(void* arg) {
-    changeMotorAcceleration(motor_target_left, motor_value_left, motor_zero_timer_left, 0);
-    changeMotorAcceleration(motor_target_right, motor_value_right, motor_zero_timer_right, 1);
-}
 
 // Utility: Map SBUS value (172–1811) to PWM control value (27–227)
 uint8_t sbusToPwm(uint16_t sbusVal) {
@@ -98,11 +93,24 @@ void loop() {
       uint8_t l_pwm = sbusToPwm(sbusData.ch[L_CHANNEL]);
       uint8_t r_pwm = sbusToPwm(sbusData.ch[R_CHANNEL]);
 
-      update_motor_pwm(DOME_SERVO_CHANNEL, h_pwm);  // Dome servo direct update
+      // update_motor_pwm(DOME_SERVO_CHANNEL, h_pwm);  // Dome servo direct update
 
       // Drive motor targets — smoothed by timer interrupt
-      motor_target_left = l_pwm;
-      motor_target_right = r_pwm;
+      // motor_target_left = l_pwm;
+      // motor_target_right = r_pwm;
+
+      uint16_t ver_8bit = sbusData.ch[R_CHANNEL] >> 3;
+      uint16_t hor_8bit = sbusData.ch[L_CHANNEL] >> 3;
+
+      control_motors_joystick(ver_8bit, hor_8bit);
+
+      int16_t dome_servo_8bit = (sbusData.ch[H_CHANNEL] - 999) >> 4;
+
+      set_servo_angle(dome_servo_8bit);
+
+
+
+
     }
   }
 

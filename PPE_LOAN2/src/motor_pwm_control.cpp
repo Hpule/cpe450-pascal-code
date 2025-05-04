@@ -4,24 +4,34 @@
 // Global timer handle
 esp_timer_handle_t accel_timer;
 
-// // Motor control state variables
-// unsigned int motor_value_left = 127;
-// unsigned int motor_target_left = 127;
-// unsigned int motor_zero_timer_left = 0;
+// Motor control state variables
+unsigned int motor_value_left = 127;
+unsigned int motor_target_left = 127;
+unsigned int motor_zero_timer_left = 0;
 
-// unsigned int motor_value_right = 127;
-// unsigned int motor_target_right = 127;
-// unsigned int motor_zero_timer_right = 0;
+unsigned int motor_value_right = 127;
+unsigned int motor_target_right = 127;
+unsigned int motor_zero_timer_right = 0;
 
-// // Min/Max Motor Speed for Debugger
-// int max_motor_speed = 100;
-// int min_motor_speed = -100;
+// Min/Max Motor Speed for Debugger
+int max_motor_speed = 100;
+int min_motor_speed = -100;
 
-// // Motor Speed Scalar
-// int motor_speed_scalar = 0;
+// Motor Speed Scalar
+int motor_speed_scalar = 0;
 
-// // Bias for the Motor Speed
-// int motor_speed_bias = 0;
+// Bias for the Motor Speed
+int motor_speed_bias = 0;
+
+// servo value
+unsigned int servo_value = 127;
+
+// Min/Max Servo Speed for Debugger
+int max_servo_speed = 100;
+int min_servo_speed = -100;
+
+// Servo Speed Scalar
+int servo_speed_scalar = 0;
 
 void setup_pwm_outputs() {
     ledc_timer_config_t timer_conf = {
@@ -35,29 +45,32 @@ void setup_pwm_outputs() {
 
     ledc_channel_config_t pwm_channels[] = {
         {
-            .channel    = LEFT_MOTOR_CHANNEL,
-            .duty       = 0,
             .gpio_num   = LEFT_MOTOR_PIN,
             .speed_mode = PWM_MODE,
-            .hpoint     = 0,
-            .timer_sel  = PWM_TIMER
+            .channel    = LEFT_MOTOR_CHANNEL,
+            .intr_type  = LEDC_INTR_DISABLE,
+            .timer_sel  = PWM_TIMER,
+            .duty       = 0,
+            .hpoint     = 0
         },
         {
-            .channel    = RIGHT_MOTOR_CHANNEL,
-            .duty       = 0,
             .gpio_num   = RIGHT_MOTOR_PIN,
             .speed_mode = PWM_MODE,
-            .hpoint     = 0,
-            .timer_sel  = PWM_TIMER
+            .channel    = RIGHT_MOTOR_CHANNEL,
+            .intr_type  = LEDC_INTR_DISABLE,
+            .timer_sel  = PWM_TIMER,
+            .duty       = 0,
+            .hpoint     = 0
         },
         {
-            .channel    = DOME_SERVO_CHANNEL,
-            .duty       = 0,
             .gpio_num   = DOME_SERVO_PIN,
             .speed_mode = PWM_MODE,
-            .hpoint     = 0,
-            .timer_sel  = PWM_TIMER
-        }
+            .channel    = DOME_SERVO_CHANNEL,
+            .intr_type  = LEDC_INTR_DISABLE,
+            .timer_sel  = PWM_TIMER,
+            .duty       = 0,
+            .hpoint     = 0
+        },
     };
 
     for (int i = 0; i < sizeof(pwm_channels) / sizeof(pwm_channels[0]); i++) {
@@ -150,4 +163,20 @@ uint8_t transformSpeed(int16_t speed, int min_speed, int max_speed, int scalar) 
     else if (speed < min_speed) speed = min_speed;
 
     return 127 - speed;
+}
+
+void set_servo_angle(int16_t speed) {
+    // Change Value
+    servo_value = transformSpeed(speed, min_servo_speed, max_servo_speed, servo_speed_scalar);
+
+    // Update Servo
+    update_motor_pwm(DOME_SERVO_CHANNEL, servo_value);
+
+}
+
+
+
+void IRAM_ATTR acceleration_timer_callback(void* arg) {
+    changeMotorAcceleration(motor_target_left, motor_value_left, motor_zero_timer_left, 0);
+    changeMotorAcceleration(motor_target_right, motor_value_right, motor_zero_timer_right, 1);
 }
